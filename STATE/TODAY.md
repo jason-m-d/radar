@@ -1,33 +1,32 @@
 # Today
-- Bootstrapping RADAR documentation and operational guardrails.
+- Smoke test validated: threads=3, tasks=3, VIP processing working
+- Ready to implement confidence slider + VIP-only toggle for user control
+- MCP filesystem access configured for Claude Build Advisor workflow
 
 # Risks
-- No product code exists yet; downstream engineering timelines depend on clear specs and workflows.
-- Confirmation policy needs strict adoption to avoid unsafe autonomous actions later.
+- None currently blocking MVP progress
+- Need to maintain beginner-friendly development pace
 
 # Blocked
-- Awaiting future decisions on infrastructure and integration authentication flows.
+- Nothing blocking immediate next steps
 
 # Decisions
-- Adopt chat-first project posture with proactive pings and autonomous task extraction at MVP.
-- Use local JSONL for MCP memory storage to retain privacy and auditability.
+- Adopt chat-first project posture with proactive pings and autonomous task extraction at MVP
+- Use local JSONL for MCP memory storage to retain privacy and auditability
+- Prioritize confidence controls (#1) before expanding feature scope
+- Focus on ChatGPT's 10-item roadmap in priority order
 
 # Next Actions
-- Finalize confirmation policy, workflow guides, and secrets inventory for the team.
-- Prepare for future scaffolding (Next.js app, integrations) once documentation is approved.
+- Implement confidence slider (0-1) and VIP-only toggle in /settings
+- Update poller to respect new confidence/VIP settings
+- Test behavior changes with count-only logs
 
 # What changed
-- Added signal delivery policies to the spec and generated RADAR documentation commits.
-- Initialized the repo, scaffolded the Next.js app, and added Google/Prisma integration stubs.
-- Implemented chat-first UI routes, poller loop, and OpenAI-backed nudge API.
-- Ran initial Prisma migration, generated the client, and seeded default settings.
-- Added VIP settings UI/API, seeded first VIP, and refactored poller logging + single-cycle helper.
-- Freed port 3000, forced dev server to bind there, and confirmed poller runs with stable logging.
-- 2025-09-29: Smoke test (real mail) passed — threads=3, tasks=3.
-
-# Next Actions
-- Populate VIP settings or sample inbox content so poller can create threads/tasks for deeper validation.
-- Expand automated tests and monitoring around polling backoff and task extraction heuristics.
-- Harden the free-port helper to support cross-platform environments and integrate into onboarding docs.
-- Capture screenshot of /tasks showing dev-seed task for design archive.
-- Local Node upgraded to v22 (per Jason), dependencies rebuilt, environment consistent with .nvmrc.
+- Added signal delivery policies to the spec and generated RADAR documentation commits
+- Initialized the repo, scaffolded the Next.js app, and added Google/Prisma integration stubs
+- Implemented chat-first UI routes, poller loop, and OpenAI-backed nudge API
+- Ran initial Prisma migration, generated the client, and seeded default settings
+- Added VIP settings UI/API, seeded first VIP, and refactored poller logging + single-cycle helper
+- Freed port 3000, forced dev server to bind there, and confirmed poller runs with stable logging
+- 2025-09-29: Smoke test (real mail) passed — threads=3, tasks=3
+- Configured MCP filesystem for Claude Build Advisor access to live repo
