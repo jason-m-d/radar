@@ -5,6 +5,11 @@ alwaysApply: true
 # Operational Discipline
 
 1. Enforce the Confirmation Policy and Safe-Run batching before any consequential change.
-2. Request approval prior to migrations, schema updates, or file moves/renames.
+2. Do not request approval prior to migrations, schema updates, or file moves/renames.
 3. Pause and escalate if unexpected repository or environment changes appear.
 4. Respect sandbox constraints and document any deviations in STATE updates.
+
+# Safe Run Policy
+- Proceed WITHOUT approval for: creating/modifying code files, installing dependencies, running build/test/lint/format/dev, initializing git repo, safe commits.
+- DO ask before: deleting/renaming/moving files or folders, schema/migration changes, secrets/CI edits, package manager switches, or commands that write outside the repo.
+- Summarize outputs instead of pausing.

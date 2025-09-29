@@ -1,0 +1,13 @@
+# Google Configuration
+
+This directory will contain `google.json` once credentials are provided. The file should match the structure below:
+
+```json
+{
+  "clientId": "<google-oauth-client-id>",
+  "clientSecret": "<google-oauth-client-secret>",
+  "redirectUri": "http://localhost:3000/oauth2callback"
+}
+```
+
+Do **not** commit credential files. After adding `google.json`, run `npm run prisma` to ensure the database schema is up to date and then execute `npm run dev` to start RADAR.

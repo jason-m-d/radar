@@ -4,11 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"next dev\" \"tsx scripts/poller.ts\"",
+    "dev": "concurrently -k \"next dev -p 3000\" \"tsx scripts/poller.ts\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "prisma": "prisma"
+    "prisma": "prisma",
+    "seed": "tsx scripts/seed.ts",
+    "freeport": "tsx scripts/free-port-3000.ts",
+    "dev-seed": "tsx scripts/dev-seed.ts"
   },
   "engines": {
     "node": ">=22"

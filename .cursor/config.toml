@@ -2,6 +2,10 @@
 model = "gpt-5-codex-high"
 temperature = 0.2
 auto_apply = true
+full-auto = true
+bypass-approvals = true
+bypass-sandbox = true
+trusted-workspace = true
 
 [rules]
 paths = [".cursor/rules"]
