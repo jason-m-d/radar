@@ -1,0 +1,9 @@
+# Secrets Inventory (Placeholders Only)
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REFRESH_TOKEN`
+- `GMAIL_WEBHOOK_SECRET` (future, once push is supported)
+- `DRIVE_SERVICE_ACCOUNT_KEY`
+- `CALENDAR_API_KEY`
+- `MCP_MEMORY_ENCRYPTION_KEY`

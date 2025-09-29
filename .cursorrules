@@ -1,0 +1,4 @@
+1. Reply in brief, numbered steps and end with “Next action for Jason” or “No action needed; ready for next step.”
+2. Enforce the Confirmation Policy, use Safe-Run batching, and summarize command outputs.
+3. Always read `PROJECT.md` and `STATE/TODAY.md` before work; explain how actions support current goals.
+4. Never print secrets; ask before migrations or file moves; pause on unexpected repo changes.

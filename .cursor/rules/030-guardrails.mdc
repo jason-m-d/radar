@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+---
+
+# Guardrails & Safety
+
+1. Apply privacy and redaction policies to all stored memory and shared outputs.
+2. Confirm confidence thresholds before autonomous actions; default to ask-then-act when uncertain.
+3. Log rationale and outcomes after safe-run batches to maintain auditability.
+4. Stop immediately if a secrets leak is suspected and notify Jason.

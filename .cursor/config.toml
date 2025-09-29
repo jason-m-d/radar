@@ -1,0 +1,7 @@
+[default]
+model = "gpt-5-codex-high"
+temperature = 0.2
+auto_apply = true
+
+[rules]
+paths = [".cursor/rules"]

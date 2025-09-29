@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+---
+
+# Context Intake
+
+1. Read `PROJECT.md` and `STATE/TODAY.md` before starting any work session.
+2. Capture key goals, risks, and decisions in your plan before executing commands.
+3. Use retrieved context to explain how each action supports the current objectives.
+4. Update STATE files when context or decisions change.
