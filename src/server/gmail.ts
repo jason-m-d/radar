@@ -3,7 +3,6 @@ import type { gmail_v1 } from "googleapis";
 import prisma from "@/lib/db";
 import { getOAuthClient, loadSavedCredentials } from "@/lib/google";
 import { TaskStatus } from "@prisma/client";
-import { getVipList } from "@/server/settings";
 
 const HISTORY_SETTING_KEY = "lastHistoryId";
 
@@ -15,6 +14,7 @@ export type GmailMessageSummary = {
   sender: string;
   receivedAt: Date;
   historyId?: string;
+  isVip: boolean;
 };
 
 export type DetectedTask = {
@@ -97,10 +97,15 @@ function toSummary(message: gmail_v1.Schema$Message): GmailMessageSummary | null
     sender,
     receivedAt: new Date(internalDate),
     historyId: message.historyId ?? undefined,
+    isVip: false,
   };
 }
 
-export async function listRecentImportantThreads(): Promise<GmailMessageSummary[]> {
+export async function listRecentImportantThreads(options: {
+  vipEntries: string[];
+  includeKeywordMatches: boolean;
+}): Promise<GmailMessageSummary[]> {
+  const { vipEntries, includeKeywordMatches } = options;
   const tokens = await loadSavedCredentials();
   if (!tokens) {
     throw new Error("Google OAuth tokens missing. Run scripts/google-auth-setup.ts first.");
@@ -110,12 +115,9 @@ export async function listRecentImportantThreads(): Promise<GmailMessageSummary[
   client.setCredentials(tokens);
   const gmail = google.gmail({ version: "v1", auth: client });
 
-  const [{ value: historyValue } = { value: null }, vipEntries] = await Promise.all([
-    prisma.setting.findUnique({ where: { key: HISTORY_SETTING_KEY } }),
-    getVipList(),
-  ]);
-
-  const startHistoryId = typeof historyValue === "string" && historyValue.length > 0 ? historyValue : undefined;
+  const historySetting = await prisma.setting.findUnique({ where: { key: HISTORY_SETTING_KEY } });
+  const startHistoryId =
+    typeof historySetting?.value === "string" && historySetting.value.length > 0 ? historySetting.value : undefined;
 
   const messageIds = await collectCandidateMessageIds(gmail, startHistoryId);
   const vipArray = Array.from(new Set(vipEntries.map((entry) => entry.toLowerCase())));
@@ -126,6 +128,8 @@ export async function listRecentImportantThreads(): Promise<GmailMessageSummary[
 
   const batches = Array.from(messageIds);
   const summaries: GmailMessageSummary[] = [];
+  let vipMatches = 0;
+  let keywordMatches = 0;
 
   for (const id of batches) {
     const response = await gmail.users.messages.get({ userId: "me", id, format: "metadata", metadataHeaders: ["From", "Subject", "Date"] });
@@ -136,14 +140,25 @@ export async function listRecentImportantThreads(): Promise<GmailMessageSummary[
 
     const senderKey = summary.sender.toLowerCase();
     const match = vipArray.some((vip) => senderKey.includes(vip));
-    if (!match) {
+
+    if (match) {
+      summaries.push({ ...summary, isVip: true });
+      vipMatches += 1;
       continue;
     }
 
-    summaries.push(summary);
+    if (includeKeywordMatches) {
+      const confidence = detectTaskConfidence(summary.subject, summary.snippet);
+      if (confidence !== null) {
+        summaries.push({ ...summary, isVip: false });
+        keywordMatches += 1;
+      }
+    }
   }
 
-  console.info(`[gmail] processed=${messageIds.size} vipMatches=${summaries.length}`);
+  console.info(
+    `[gmail] processed=${messageIds.size} vipMatches=${vipMatches} keywordMatches=${keywordMatches} includeKeywordMatches=${includeKeywordMatches}`,
+  );
 
   return summaries;
 }
@@ -154,30 +169,72 @@ const TASK_KEYWORDS = [
   { pattern: /\b(action required|please (?:send|review|confirm))/i, weight: 0.75 },
 ];
 
-export function extractTasksFromMessage(message: GmailMessageSummary): DetectedTask[] {
-  const text = `${message.subject} ${message.snippet}`.toLowerCase();
+function detectTaskConfidence(subject: string, snippet: string): number | null {
+  const text = `${subject} ${snippet}`.toLowerCase();
   const detected = TASK_KEYWORDS.filter(({ pattern }) => pattern.test(text));
 
   if (!detected.length) {
-    return [];
+    return null;
   }
 
-  const maxWeight = Math.max(...detected.map((entry) => entry.weight));
+  return Math.max(...detected.map((entry) => entry.weight));
+}
+
+export function extractTasksFromMessage(message: GmailMessageSummary): DetectedTask[] {
+  const confidence = detectTaskConfidence(message.subject, message.snippet);
+
+  if (confidence === null) {
+    return [];
+  }
 
   return [
     {
       title: message.subject.trim() || "Follow up",
       status: TaskStatus.TODO,
-      confidence: Number(maxWeight.toFixed(2)),
+      confidence: Number(confidence.toFixed(2)),
     },
   ];
 }
 
-export function summarizeMessageForLog(message: GmailMessageSummary): Record<string, unknown> {
+type ThreadRecordForSummary = {
+  threadId: string;
+  subject: string | null;
+  participants: string;
+  lastMessageAt: Date;
+  isVip: boolean;
+};
+
+function firstParticipant(participants: string): string | undefined {
+  try {
+    const parsed = JSON.parse(participants);
+    if (Array.isArray(parsed)) {
+      const entry = parsed.find((value) => typeof value === "string");
+      if (typeof entry === "string") {
+        return entry;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+export function summarizeMessageForLog(message: GmailMessageSummary | ThreadRecordForSummary): Record<string, unknown> {
+  const subject = message.subject ?? "(no subject)";
+  const sender =
+    "sender" in message && typeof message.sender === "string"
+      ? message.sender
+      : firstParticipant((message as ThreadRecordForSummary).participants) ?? "unknown";
+  const received =
+    "receivedAt" in message && message.receivedAt instanceof Date
+      ? message.receivedAt
+      : (message as ThreadRecordForSummary).lastMessageAt;
+
   return {
     threadId: message.threadId,
-    subject: message.subject,
-    sender: maskEmail(message.sender),
-    receivedAt: message.receivedAt.toISOString(),
+    subject,
+    sender: maskEmail(sender),
+    receivedAt: received instanceof Date ? received.toISOString() : undefined,
+    isVip: message.isVip,
   };
 }
