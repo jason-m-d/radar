@@ -23,9 +23,11 @@
 - Ran initial Prisma migration, generated the client, and seeded default settings.
 - Added VIP settings UI/API, seeded first VIP, and refactored poller logging + single-cycle helper.
 - Freed port 3000, forced dev server to bind there, and confirmed poller runs with stable logging.
+- 2025-09-29: Smoke test (real mail) passed — threads=3, tasks=3.
 
 # Next Actions
 - Populate VIP settings or sample inbox content so poller can create threads/tasks for deeper validation.
 - Expand automated tests and monitoring around polling backoff and task extraction heuristics.
 - Harden the free-port helper to support cross-platform environments and integrate into onboarding docs.
 - Capture screenshot of /tasks showing dev-seed task for design archive.
+- Local Node upgraded to v22 (per Jason), dependencies rebuilt, environment consistent with .nvmrc.
