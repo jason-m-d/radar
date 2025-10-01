@@ -31,7 +31,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Invalid rule payload." }, { status: 400 });
   }
 
-  const created = await createRule(toRuleInput(parsed.data));
+  const created = await createRule(toRuleInput(parsed.data), {
+    actor: "settings-ui",
+    reason: "manual-entry",
+  });
 
   return NextResponse.json({ rule: created });
 }

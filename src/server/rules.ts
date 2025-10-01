@@ -1,5 +1,6 @@
 import { RuleAction, RuleType } from "@prisma/client";
 import prisma from "@/lib/db";
+import { recordAuditEvent } from "@/server/audit";
 
 export type RuleInput = {
   type: RuleType;
@@ -28,10 +29,10 @@ export async function listRules() {
   return prisma.vipSuppressionRule.findMany({ orderBy: { createdAt: "desc" } });
 }
 
-export async function createRule(input: RuleInput) {
+export async function createRule(input: RuleInput, context?: { actor?: string; reason?: string }) {
   const pattern = normalizePattern(input.type, input.pattern);
 
-  return prisma.vipSuppressionRule.create({
+  const result = await prisma.vipSuppressionRule.create({
     data: {
       type: input.type,
       pattern,
@@ -41,14 +42,29 @@ export async function createRule(input: RuleInput) {
       confidence: typeof input.confidence === "number" ? input.confidence : null,
     },
   });
+
+  await recordAuditEvent({
+    actor: context?.actor,
+    action: "RULE_CREATED",
+    entity: "VipSuppressionRule",
+    entityId: result.id,
+    details: {
+      pattern: result.pattern,
+      type: result.type,
+      action: result.action,
+      reason: context?.reason,
+    },
+  });
+
+  return result;
 }
 
-export async function createRulesBulk(inputs: RuleInput[]) {
+export async function createRulesBulk(inputs: RuleInput[], context?: { actor?: string; reason?: string }) {
   if (!inputs.length) {
     return [];
   }
 
-  return prisma.$transaction(
+  const created = await prisma.$transaction(
     inputs.map((input) =>
       prisma.vipSuppressionRule.create({
         data: {
@@ -62,10 +78,35 @@ export async function createRulesBulk(inputs: RuleInput[]) {
       }),
     ),
   );
+
+  await Promise.all(
+    created.map((entry) =>
+      recordAuditEvent({
+        actor: context?.actor,
+        action: "RULE_CREATED",
+        entity: "VipSuppressionRule",
+        entityId: entry.id,
+        details: {
+          pattern: entry.pattern,
+          type: entry.type,
+          action: entry.action,
+          reason: context?.reason,
+        },
+      }),
+    ),
+  );
+
+  return created;
 }
 
 export async function deleteRule(id: string) {
-  await prisma.vipSuppressionRule.delete({ where: { id } });
+  const deleted = await prisma.vipSuppressionRule.delete({ where: { id } });
+  await recordAuditEvent({
+    action: "RULE_DELETED",
+    entity: "VipSuppressionRule",
+    entityId: id,
+    details: { pattern: deleted.pattern, type: deleted.type, action: deleted.action },
+  });
 }
 
 export type ParsedRule = {

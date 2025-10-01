@@ -56,7 +56,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const created = await createRulesBulk(Array.from(dedup.values()));
+    const created = await createRulesBulk(Array.from(dedup.values()), {
+      actor: "csv-import",
+      reason: "bulk-import",
+    });
     return NextResponse.json({ count: created.length });
   } catch (error) {
     safeLog("[rules] csv import error", { message: error instanceof Error ? error.message : String(error) });

@@ -81,6 +81,18 @@ model Setting {
   value Json
 }
 
+model AuditEvent {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  entity    String
+  entityId  String
+  details   Json
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}
+
 model VipSuppressionRule {
   id             String      @id @default(cuid())
   type           RuleType
