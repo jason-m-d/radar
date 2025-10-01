@@ -1,6 +1,8 @@
 import { pathToFileURL } from "node:url";
 import prisma from "@/lib/db";
 import { listRecentImportantThreads, extractTasksFromMessage, summarizeMessageForLog } from "@/server/gmail";
+import { safeLog } from "@/server/redact";
+import { listRules } from "@/server/rules";
 import { getVipList, getProcessingConfig } from "@/server/settings";
 
 const POLL_INTERVAL_MS = 3 * 60 * 1000;
@@ -19,19 +21,17 @@ type CycleLogDetails = {
 };
 
 function logCycle(details: CycleLogDetails) {
-  const parts = [
-    `cycle=${details.cycle ?? "run"}`,
-    `processed=${details.processedThreads ?? 0}`,
-    `newThreads=${details.newThreads ?? 0}`,
-    `newTasks=${details.newTasks ?? 0}`,
-    `askFirst=${details.askFirst ?? 0}`,
-    `vipOnly=${details.vipOnly === undefined ? "n/a" : details.vipOnly ? "true" : "false"}`,
-    `confidence=${typeof details.confidence === "number" ? details.confidence.toFixed(2) : "n/a"}`,
-    `vipCount=${details.vipCount ?? 0}`,
-    `historyUpdated=${details.updatedHistoryId ? "yes" : "no"}`,
-  ];
-
-  console.info(`[poller] ${parts.join(" ")}`);
+  safeLog("[poller]", {
+    cycle: details.cycle ?? "run",
+    processed: details.processedThreads ?? 0,
+    newThreads: details.newThreads ?? 0,
+    newTasks: details.newTasks ?? 0,
+    askFirst: details.askFirst ?? 0,
+    vipOnly: details.vipOnly ?? null,
+    confidence: typeof details.confidence === "number" ? Number(details.confidence.toFixed(2)) : null,
+    vipCount: details.vipCount ?? 0,
+    historyUpdated: details.updatedHistoryId ? "yes" : "no",
+  });
 }
 
 async function updateHistoryId(historyId: string) {
@@ -52,10 +52,11 @@ async function handleThreads(): Promise<{
   confidence: number;
   askFirst: number;
 }> {
-  const [vipEntries, config] = await Promise.all([getVipList(), getProcessingConfig()]);
+  const [vipEntries, config, rules] = await Promise.all([getVipList(), getProcessingConfig(), listRules()]);
   const threads = await listRecentImportantThreads({
     vipEntries,
     includeKeywordMatches: !config.vipOnly,
+    rules,
   });
 
   if (!threads.length) {
@@ -117,7 +118,7 @@ async function handleThreads(): Promise<{
     for (const task of detectedTasks) {
       if (task.confidence < config.confidence) {
         askFirst += 1;
-        console.info("[poller] ask-first", {
+        safeLog("[poller] ask-first", {
           thread: summarizeMessageForLog(thread),
           confidence: task.confidence,
           threshold: config.confidence,
@@ -197,7 +198,7 @@ export async function runPollerCycle(): Promise<{
   try {
     return await handleThreads();
   } catch (error) {
-    console.error("[poller] cycle error", { message: (error as Error).message });
+    safeLog("[poller] cycle error", { message: (error as Error).message });
     const [vipEntries, config] = await Promise.all([
       getVipList(),
       getProcessingConfig().catch(() => ({ confidence: 0.7, vipOnly: true })),

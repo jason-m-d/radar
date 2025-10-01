@@ -19,6 +19,17 @@ enum ProjectState {
   DONE
 }
 
+enum RuleType {
+  EMAIL
+  DOMAIN
+  TOPIC
+}
+
+enum RuleAction {
+  VIP
+  SUPPRESS
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -68,4 +79,17 @@ model Setting {
   id    String @id @default(cuid())
   key   String @unique
   value Json
+}
+
+model VipSuppressionRule {
+  id             String      @id @default(cuid())
+  type           RuleType
+  pattern        String
+  action         RuleAction
+  unlessContains String?
+  notes          String?
+  confidence     Float?
+  createdAt      DateTime    @default(now())
+
+  @@index([type, pattern])
 }

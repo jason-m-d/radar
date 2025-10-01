@@ -2,24 +2,24 @@
 
 ## Current Priority Order
 
-### 🎯 **#1 - Confidence Slider + VIP-only Toggle** 
-- **Status**: ✅ COMPLETE (2025-09-30)
-- **Why**: Feel aggression safely without code changes
-- **Done when**: Slider (0-1) + toggle persist, poller behavior changes, logs prove it
-- **Effort**: Small, Risk: Low
+### ✅ **#1 - Confidence Slider + VIP-only Toggle** 
+- **Status**: COMPLETE ✅
+- **Completed**: 2025-09-29
+- **What works**: Settings API, UI controls, poller behavior changes, persistence
 
-### 🚀 **#2 - Basic VIP/Suppression Rules**
-- **Status**: UP NEXT (kickoff pending)
+### 🎯 **#2 - Basic VIP/Suppression Rules**
+- **Status**: COMPLETE ✅ (2025-09-30)
 - **Why**: Current email-only system can't handle domains (@wingstop.com) or topics (newsletter)
-- **Done when**: Support email, domain, and topic rules with VIP/Suppress actions
+- **Deliverables**: Natural-language parser + CSV import + poller exception-aware routing
 - **Effort**: Medium, Risk: Low
-- **Scope**: Simple matching logic (contains/equals), dropdown UI (Email/Domain/Topic), no AI parsing
-- **Future**: Complex rules like "unless contains" and Tinder-style training later
+- **Notes**: Rules cover email/domain/topic, optional `unless` exceptions, hybrid parsing, editable confirmations, and flexible CSV preview with overrides
+
+### ✅ **#3 - Health Check Endpoint**
+- **Status**: COMPLETE ✅ (2025-09-30)
+- **Deliverables**: `/api/health` returns `{ ok, timestamp, version, uptimeSeconds, environment, checks }`
+- **Notes**: Includes DB connectivity probe and JSON suitable for deploy monitoring
 
 ### 📋 **Remaining Queue**
-
-**#3 - Health Check Endpoint** (XS effort)
-- `/api/health` returns `{ ok: true, ts }`
 
 **#4 - Error Handling & Redaction** (S effort)
 - No email/subject leaks, count-only logs, user-safe error messages
@@ -48,7 +48,7 @@
 ---
 
 ## Future Enhancements (Post-MVP)
-- **Advanced VIP/Suppression**: AI parsing (`@abc.com unless overdue`), CSV import, Tinder-style training
+- **Advanced VIP/Suppression**: AI parsing (`@abc.com unless overdue`), Tinder-style training
 - **Complex rule exceptions**: "unless contains" logic
 - **Natural language rule entry**: Smart parsing of user intent
 
@@ -59,7 +59,7 @@
 - **Priority drives development**: Work items in order unless blocked
 - **Effort estimates**: XS (<1hr), S (<4hr), M (<1day), L (<3days)
 - **MVP focus**: Basic functionality before advanced features
-- **Flexibility**: Can adjust order based on learnings and blockers
+- **Storage**: All data in local SQLite during development
 
 ---
 *Last updated: 2025-09-30*

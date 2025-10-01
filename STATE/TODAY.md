@@ -1,7 +1,7 @@
 # Today
-- Smoke test validated: threads=3, tasks=3, VIP processing working
-- Confidence slider + VIP-only toggle shipped; poller obeys new controls
-- MCP filesystem access configured for Claude Build Advisor workflow
+- Confidence slider completed and committed (roadmap #1 COMPLETE)
+- Hybrid VIP/Suppression rules live: regex-first parsing, editable confirmation, AI fallback, previewable CSV import with overrides, poller logic
+- Health check endpoint published for deploy monitoring
 
 # Risks
 - None currently blocking MVP progress
@@ -13,13 +13,13 @@
 # Decisions
 - Adopt chat-first project posture with proactive pings and autonomous task extraction at MVP
 - Use local JSONL for MCP memory storage to retain privacy and auditability
-- Prioritize confidence controls (#1) before expanding feature scope
-- Follow docs/ROADMAP.md priority order with Smart VIP/Suppression as #2
+- Follow docs/ROADMAP.md priority order (now moving to #3 Health Check Endpoint)
+- Maintain AI parser + CSV flow as canonical interface for rule management
 
 # Next Actions
-- Kick off #2 Basic VIP/Suppression Rules (email/domain/topic matchers)
-- Add /api/health endpoint for deploy checks
-- Prepare GitHub Actions CI workflow (Node 22, build + tsc)
+- Plan and implement error-handling/redaction improvements (#4 roadmap)
+- Monitor rule telemetry, gather edge-case feedback for parser + exception tuning
+- Prep deployment checklist updates now that health endpoint exists
 
 # What changed
 - Added signal delivery policies to the spec and generated RADAR documentation commits
@@ -31,4 +31,6 @@
 - 2025-09-29: Smoke test (real mail) passed — threads=3, tasks=3
 - Configured MCP filesystem for Claude Build Advisor access to live repo
 - Created docs/ROADMAP.md with 11-item priority list, Smart VIP/Suppression as #2
-- 2025-09-30: Implemented confidence slider + VIP-only toggle, added settings API, and aligned poller behavior with ask-first logging
+- COMPLETED: Confidence slider + VIP-only toggle (#1) with settings API, UI controls, poller integration
+- 2025-09-30: Delivered VipSuppressionRule schema, hybrid parser UI (regex + AI fallback), CSV import, settings UI, and poller rule logic
+- 2025-09-30: Added `/api/health` with uptime/version/db checks for deploy readiness

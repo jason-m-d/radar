@@ -1,4 +1,4 @@
-# RADAR – Context Snapshot (as of 2025-09-29)
+# RADAR – Context Snapshot (as of 2025-09-30)
 
 This file exists to preserve important context between Codex sessions.  
 Codex should read this file at session start to load current state.
@@ -10,9 +10,16 @@ Codex should read this file at session start to load current state.
   - Threads = 3  
   - Tasks = 3  
   - VIP count = 2  
-- 2025-09-30: Confidence slider + VIP-only toggle shipped with poller "ask-first" gating.
 - Repo pushed to GitHub: https://github.com/jason-m-d/radar  
 - Local Node version = **22.x** (matches `.nvmrc`). Deps rebuilt.  
+- **Confidence slider implemented** on 2025-09-29.
+  - Settings API with Zod validation
+  - UI controls working (slider 0-1, VIP-only toggle)
+  - Poller respects confidence thresholds and VIP-only mode
+- **AI-powered VIP/Suppression rules shipped** on 2025-09-30.
+  - VipSuppressionRule table with exception logic
+  - Natural-language parser + CSV import endpoints
+  - Poller honors VIP promotions and suppressions with logging
 
 ---
 
@@ -23,18 +30,22 @@ Codex should read this file at session start to load current state.
 ---
 
 ## Features working
-- Gmail poller (read-only scopes), cycles every 3 min with confidence + VIP-only controls.  
-- Tasks auto-created from VIP mail with "tasky" phrases, with ask-first logging below threshold.  
+- Gmail poller (read-only scopes), cycles every 3 min.  
+- Tasks auto-created from VIP mail with "tasky" phrases.  
 - `/tasks` shows tasks (verified real email).  
-- `/settings` manages VIP list plus confidence slider (0-1) and VIP-only toggle.  
+- `/settings` allows VIP management and advanced rule controls.  
+- **Confidence controls**: slider (0-1) and VIP-only toggle with real-time behavior changes
+- **Hybrid VIP/Suppression rules**: regex-first parsing, editable confirmations, flexible CSV preview/override workflow, optional AI enrichment; poller applies rules + exceptions
+- **Health endpoint**: `/api/health` exposes uptime, version, DB status for deploy checks
 - Dev-seed harness working (`npm run dev-seed`).  
 - Stable on **http://localhost:3000** with freeport script.  
 
 ---
 
 ## In Progress
-- Queuing roadmap #2: Smart VIP/Suppression Management (design pending)  
-- Monitoring confidence/vip-only telemetry after launch  
+- **Error Handling & Redaction** (#4 priority)
+  - Ensure logs redact sensitive data, user-facing errors stay safe
+  - Status: Not started; queued next
 
 ---
 
@@ -50,7 +61,8 @@ Codex should read this file at session start to load current state.
 
 ## Development Priorities
 See **docs/ROADMAP.md** for the full 11-item prioritized roadmap.  
-Next up: #2 Smart VIP/Suppression Management (after confidence slider completes).
+Currently working on: #3 Health Check Endpoint
+Next up: #4 Error Handling & Redaction
 
 ---
 
