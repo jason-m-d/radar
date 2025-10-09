@@ -17,6 +17,8 @@ export type GmailMessageSummary = {
   senderDomain: string | null;
   receivedAt: Date;
   historyId?: string;
+  labelIds: string[];
+  bodyText: string;
   isVip: boolean;
   rule?: {
     id: string;
@@ -85,35 +87,103 @@ function matchesRule(
   return text.includes(rule.pattern);
 }
 
+function decodeBody(body: gmail_v1.Schema$MessagePartBody | undefined): string {
+  if (!body?.data) {
+    return "";
+  }
+
+  try {
+    return Buffer.from(body.data, "base64url").toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function extractPlainText(payload: gmail_v1.Schema$MessagePart | undefined): string {
+  if (!payload) {
+    return "";
+  }
+
+  const { mimeType, body, parts } = payload;
+
+  if (mimeType?.startsWith("text/plain")) {
+    return decodeBody(body).trim();
+  }
+
+  if (mimeType?.startsWith("text/html")) {
+    return stripHtml(decodeBody(body));
+  }
+
+  if (Array.isArray(parts) && parts.length) {
+    const collected = parts
+      .map((part) => extractPlainText(part))
+      .filter((text) => text.trim().length > 0);
+
+    if (collected.length) {
+      return collected.join("\n");
+    }
+  }
+
+  const fallback = decodeBody(body);
+  return fallback.trim();
+}
+
 async function collectCandidateMessageIds(
   gmail: gmail_v1.Gmail,
   startHistoryId?: string,
-): Promise<Set<string>> {
+): Promise<{
+  messageIds: Set<string>;
+  historyId: string | null;
+  fallbackUsed: boolean;
+}> {
   const messageIds = new Set<string>();
+  let latestHistoryId: string | null = null;
+  let fallbackUsed = false;
 
   if (startHistoryId) {
-    const history = await gmail.users.history.list({
-      userId: "me",
-      startHistoryId,
-      historyTypes: ["messageAdded"],
-      labelId: "INBOX",
-    });
-
-    history.data.history?.forEach((entry) => {
-      entry.messagesAdded?.forEach((added) => {
-        const id = added.message?.id;
-        if (id) {
-          messageIds.add(id);
-        }
+    try {
+      const history = await gmail.users.history.list({
+        userId: "me",
+        startHistoryId,
+        historyTypes: ["messageAdded"],
+        labelId: ["INBOX", "SENT"] as unknown as string,
       });
-    });
+
+      history.data.history?.forEach((entry) => {
+        entry.messagesAdded?.forEach((added) => {
+          const id = added.message?.id;
+          if (id) {
+            messageIds.add(id);
+          }
+        });
+      });
+
+      if (history.data.historyId) {
+        latestHistoryId = history.data.historyId;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (message.includes("not found") || message.includes("invalid")) {
+        fallbackUsed = true;
+        safeLog("[gmail] stale historyId detected, falling back to recent messages", {
+          startHistoryId,
+        });
+      } else {
+        throw error;
+      }
+    }
   }
 
   if (!messageIds.size) {
+    fallbackUsed = true;
     const recent = await gmail.users.messages.list({
       userId: "me",
-      labelIds: ["INBOX"],
-      maxResults: 25,
+      labelIds: ["INBOX", "SENT"],
+      maxResults: 50,
       q: "newer_than:7d",
     });
 
@@ -122,9 +192,13 @@ async function collectCandidateMessageIds(
         messageIds.add(message.id);
       }
     });
+
+    if (recent.data.historyId) {
+      latestHistoryId = recent.data.historyId;
+    }
   }
 
-  return messageIds;
+  return { messageIds, historyId: latestHistoryId, fallbackUsed };
 }
 
 function toSummary(message: gmail_v1.Schema$Message): GmailMessageSummary | null {
@@ -149,126 +223,157 @@ function toSummary(message: gmail_v1.Schema$Message): GmailMessageSummary | null
     senderDomain,
     receivedAt: new Date(internalDate),
     historyId: message.historyId ?? undefined,
+    labelIds: Array.isArray(message.labelIds) ? message.labelIds : [],
+    bodyText: extractPlainText(message.payload),
     isVip: false,
   };
 }
+
+export type GmailThreadFetchResult = {
+  threads: GmailMessageSummary[];
+  historyId: string | null;
+  fallbackUsed: boolean;
+  startHistoryId?: string;
+};
 
 export async function listRecentImportantThreads(options: {
   vipEntries: string[];
   includeKeywordMatches: boolean;
   rules: VipSuppressionRule[];
-}): Promise<GmailMessageSummary[]> {
+}): Promise<GmailThreadFetchResult> {
   try {
     const { vipEntries, includeKeywordMatches, rules } = options;
-  const tokens = await loadSavedCredentials();
-  if (!tokens) {
-    throw new Error("Google OAuth tokens missing. Run scripts/google-auth-setup.ts first.");
-  }
+    const tokens = await loadSavedCredentials();
+    if (!tokens) {
+      throw new Error("Google OAuth tokens missing. Run scripts/google-auth-setup.ts first.");
+    }
 
-  const client = await getOAuthClient();
-  client.setCredentials(tokens);
-  const gmail = google.gmail({ version: "v1", auth: client });
+    const client = await getOAuthClient();
+    client.setCredentials(tokens);
+    const gmail = google.gmail({ version: "v1", auth: client });
 
-  const historySetting = await prisma.setting.findUnique({ where: { key: HISTORY_SETTING_KEY } });
-  const startHistoryId =
-    typeof historySetting?.value === "string" && historySetting.value.length > 0 ? historySetting.value : undefined;
+    const historySetting = await prisma.setting.findUnique({ where: { key: HISTORY_SETTING_KEY } });
+    const startHistoryId =
+      typeof historySetting?.value === "string" && historySetting.value.length > 0 ? historySetting.value : undefined;
 
-  const messageIds = await collectCandidateMessageIds(gmail, startHistoryId);
-  const vipArray = Array.from(new Set(vipEntries.map((entry) => entry.toLowerCase())));
-  const ruleList = Array.isArray(rules) ? rules : [];
+    const { messageIds, historyId: candidateHistoryId, fallbackUsed } = await collectCandidateMessageIds(
+      gmail,
+      startHistoryId,
+    );
+    const vipArray = Array.from(new Set(vipEntries.map((entry) => entry.toLowerCase())));
+    const ruleList = Array.isArray(rules) ? rules : [];
 
     if (!messageIds.size) {
-      return [];
+      return { threads: [], historyId: candidateHistoryId ?? null, fallbackUsed, startHistoryId };
     }
 
-  const batches = Array.from(messageIds);
-  const summaries: GmailMessageSummary[] = [];
-  let vipMatches = 0;
-  let keywordMatches = 0;
-  let rulePromotions = 0;
-  let ruleSuppressions = 0;
+    const batches = Array.from(messageIds);
+    const summaries: GmailMessageSummary[] = [];
+    let vipMatches = 0;
+    let keywordMatches = 0;
+    let rulePromotions = 0;
+    let ruleSuppressions = 0;
+    let latestHistoryId = candidateHistoryId ?? null;
 
     for (const id of batches) {
-    const response = await gmail.users.messages.get({ userId: "me", id, format: "metadata", metadataHeaders: ["From", "Subject", "Date"] });
-    const summary = toSummary(response.data);
-    if (!summary) {
-      continue;
-    }
-
-    const senderKey = summary.senderEmail;
-    const domain = summary.senderDomain;
-    const baseVipMatch = vipArray.some((vip) => senderKey.includes(vip));
-    const text = `${summary.subject} ${summary.snippet}`.toLowerCase();
-
-    let suppressed = false;
-    let ruleAttachment: GmailMessageSummary["rule"] | undefined;
-
-    for (const rule of ruleList) {
-      if (!matchesRule(rule, senderKey, domain, text)) {
-        continue;
-      }
-
-      const exceptionMatched = rule.unlessContains ? text.includes(rule.unlessContains.toLowerCase()) : false;
-
-      if (exceptionMatched) {
-        safeLog("[#rules] skipped", {
-          ruleId: rule.id,
-          rule: formatRulePattern(rule),
-          exception: rule.unlessContains,
-        });
-        continue;
-      }
-
-      const suffix = rule.unlessContains
-        ? `${rule.unlessContains} exception not found`
-        : "no exception";
-
-      if (rule.action === RuleAction.SUPPRESS) {
-        ruleSuppressions += 1;
-        safeLog("[gmail] suppress", {
-          ruleId: rule.id,
-          rule: formatRulePattern(rule),
-          exceptionState: suffix,
-        });
-        suppressed = true;
-        break;
-      }
-
-      rulePromotions += 1;
-      ruleAttachment = {
-        id: rule.id,
-        action: rule.action,
-        type: rule.type,
-        pattern: rule.pattern,
-        unlessContains: rule.unlessContains ?? null,
-      };
-      safeLog("[gmail] promote", {
-        ruleId: rule.id,
-        rule: formatRulePattern(rule),
-        exceptionState: suffix,
+      const response = await gmail.users.messages.get({
+        userId: "me",
+        id,
+        format: "full",
       });
-      break;
+      const summary = toSummary(response.data);
+      if (!summary) {
+        continue;
+      }
+
+      const labels = summary.labelIds;
+      const isSent = labels.includes("SENT");
+      const isIncoming = labels.includes("INBOX");
+      const direction = isSent && isIncoming ? "BOTH" : isSent ? "OUTGOING" : "INCOMING";
+      const skipFiltering = direction === "OUTGOING";
+
+      if (summary.historyId) {
+        if (!latestHistoryId || BigInt(summary.historyId) > BigInt(latestHistoryId)) {
+          latestHistoryId = summary.historyId;
+        }
+      }
+
+      const senderKey = summary.senderEmail;
+      const domain = summary.senderDomain;
+      const baseVipMatch = vipArray.some((vip) => senderKey.includes(vip));
+      const text = `${summary.subject} ${summary.snippet} ${summary.bodyText}`.toLowerCase();
+
+      let suppressed = false;
+      let ruleAttachment: GmailMessageSummary["rule"] | undefined;
+
+      if (!skipFiltering) {
+        for (const rule of ruleList) {
+          if (!matchesRule(rule, senderKey, domain, text)) {
+            continue;
+          }
+
+          const exceptionMatched = rule.unlessContains ? text.includes(rule.unlessContains.toLowerCase()) : false;
+
+          if (exceptionMatched) {
+            safeLog("[#rules] skipped", {
+              ruleId: rule.id,
+              rule: formatRulePattern(rule),
+              exception: rule.unlessContains,
+            });
+            continue;
+          }
+
+          const suffix = rule.unlessContains ? `${rule.unlessContains} exception not found` : "no exception";
+
+          if (rule.action === RuleAction.SUPPRESS) {
+            ruleSuppressions += 1;
+            safeLog("[gmail] suppress", {
+              ruleId: rule.id,
+              rule: formatRulePattern(rule),
+              exceptionState: suffix,
+            });
+            suppressed = true;
+            break;
+          }
+
+          rulePromotions += 1;
+          ruleAttachment = {
+            id: rule.id,
+            action: rule.action,
+            type: rule.type,
+            pattern: rule.pattern,
+            unlessContains: rule.unlessContains ?? null,
+          };
+          safeLog("[gmail] promote", {
+            ruleId: rule.id,
+            rule: formatRulePattern(rule),
+            exceptionState: suffix,
+          });
+          break;
+        }
+      }
+
+      if (suppressed) {
+        continue;
+      }
+
+      const keywordConfidence = includeKeywordMatches ? detectTaskConfidence(summary.subject, summary.snippet) : null;
+      const include = skipFiltering || baseVipMatch || ruleAttachment || (includeKeywordMatches && keywordConfidence !== null);
+
+      if (!include) {
+        continue;
+      }
+
+      if (baseVipMatch) {
+        vipMatches += 1;
+      } else if (keywordConfidence !== null) {
+        keywordMatches += 1;
+      }
+
+      const isVipFlag = skipFiltering ? true : Boolean(baseVipMatch || ruleAttachment);
+
+      summaries.push({ ...summary, isVip: isVipFlag, rule: ruleAttachment });
     }
-
-    if (suppressed) {
-      continue;
-    }
-
-    const keywordConfidence = includeKeywordMatches ? detectTaskConfidence(summary.subject, summary.snippet) : null;
-    const include = baseVipMatch || ruleAttachment || (includeKeywordMatches && keywordConfidence !== null);
-
-    if (!include) {
-      continue;
-    }
-
-    if (baseVipMatch) {
-      vipMatches += 1;
-    } else if (keywordConfidence !== null) {
-      keywordMatches += 1;
-    }
-
-    summaries.push({ ...summary, isVip: Boolean(baseVipMatch || ruleAttachment), rule: ruleAttachment });
-  }
 
     safeLog("[gmail]", {
       processed: messageIds.size,
@@ -279,17 +384,23 @@ export async function listRecentImportantThreads(options: {
       includeKeywordMatches,
     });
 
-    return summaries;
+    return {
+      threads: summaries,
+      historyId: latestHistoryId,
+      fallbackUsed,
+      startHistoryId,
+    };
   } catch (error) {
     safeLog("[gmail] error", { message: error instanceof Error ? error.message : String(error) });
-    return [];
+    return { threads: [], historyId: null, fallbackUsed: true };
   }
 }
 
 const TASK_KEYWORDS = [
-  { pattern: /\b(due|deadline|by\s+\w+)/i, weight: 0.9 },
-  { pattern: /\b(follow up|follow-up|check in)/i, weight: 0.6 },
-  { pattern: /\b(action required|please (?:send|review|confirm))/i, weight: 0.75 },
+  { pattern: /\b(action required|requires action|needs your action)\b/i, weight: 0.95 },
+  { pattern: /\bplease\s+(?:review|approve|confirm|respond|handle)\b/i, weight: 0.85 },
+  { pattern: /\bcan you\s+(?:follow up|handle|take a look|assist)\b/i, weight: 0.8 },
+  { pattern: /\bwe need to\s+(?:finish|complete|address|resolve)\b/i, weight: 0.8 },
 ];
 
 function detectTaskConfidence(subject: string, snippet: string): number | null {
@@ -300,7 +411,8 @@ function detectTaskConfidence(subject: string, snippet: string): number | null {
     return null;
   }
 
-  return Math.max(...detected.map((entry) => entry.weight));
+  const maxWeight = Math.max(...detected.map((entry) => entry.weight));
+  return maxWeight >= 0.75 ? maxWeight : null;
 }
 
 export function extractTasksFromMessage(message: GmailMessageSummary): DetectedTask[] {

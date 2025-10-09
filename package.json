@@ -11,18 +11,28 @@
     "prisma": "prisma",
     "seed": "tsx scripts/seed.ts",
     "freeport": "tsx scripts/free-port-3000.ts",
-    "dev-seed": "tsx scripts/dev-seed.ts"
+    "dev-seed": "tsx scripts/dev-seed.ts",
+    "backup:test": "tsx scripts/backup-test-data.ts",
+    "cleanup:test": "tsx scripts/nuclear-test-cleanup.ts",
+    "google-auth": "tsx scripts/google-auth-setup.ts",
+    "poller": "tsx scripts/poller.ts",
+    "reset-dock": "tsx scripts/reset-dock.ts"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "@anthropic-ai/vertex-sdk": "^0.14.0",
     "@googleapis/gmail": "^15.0.0",
+    "dotenv": "^17.2.3",
     "googleapis": "^160.0.0",
+    "lucide-react": "^0.544.0",
     "next": "^15.6.0-canary.34",
     "openai": "^5.23.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-markdown": "^9.1.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

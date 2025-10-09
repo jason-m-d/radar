@@ -28,7 +28,8 @@ function parseParticipants(raw: string | null | undefined): string[] {
   }
 }
 
-export default async function SubchatPage({ params }: { params: { id: string } }) {
+export default async function SubchatPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const context = await getContext(params.id);
 
   if (!context) {
